@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solara City — Open-World Crime Game</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #0b0e14;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  /* ---------- HUD ---------- */
+  #hud { display: none; position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
+  #minimap {
+    position: absolute; left: 18px; bottom: 18px; width: 190px; height: 190px;
+    border: 3px solid rgba(255,255,255,.85); border-radius: 50%; background: #6f9a5e;
+    box-shadow: 0 4px 18px rgba(0,0,0,.5);
+  }
+  #stats {
+    position: absolute; right: 18px; top: 14px; text-align: right;
+    text-shadow: 0 2px 4px rgba(0,0,0,.8);
+  }
+  #stars { font-size: 30px; letter-spacing: 3px; color: #bbb; line-height: 1; }
+  #stars.hot { color: #ffd23f; }
+  #cash { font-size: 26px; font-weight: 800; color: #7ddb8a; margin-top: 4px; }
+  #ammo { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  #health-bar { position: absolute; right: 18px; top: 108px; width: 220px; }
+  #health-track {
+    height: 12px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.6);
+    border-radius: 6px; overflow: hidden;
+  }
+  #health-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #37d67a, #a4e65a); transition: width .2s;
+  }
+  #health-fill.low { background: linear-gradient(90deg, #d63737, #ff7a5a); }
+  #health-text { text-align: right; font-size: 13px; font-weight: 700; text-shadow: 0 1px 3px #000; }
+  #objective {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.55); border-left: 4px solid #ffd23f; padding: 8px 16px;
+    font-size: 16px; font-weight: 600; border-radius: 4px; max-width: 60%; text-align: center;
+  }
+  #speed {
+    display: none; position: absolute; right: 24px; bottom: 24px;
+    font-size: 34px; font-weight: 800; text-shadow: 0 2px 6px #000;
+  }
+  #hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    font-size: 13px; color: rgba(255,255,255,.85); text-shadow: 0 1px 3px #000;
+    background: rgba(0,0,0,.35); padding: 5px 12px; border-radius: 12px; white-space: nowrap;
+  }
+  #toast {
+    position: absolute; left: 50%; top: 64px; transform: translateX(-50%) translateY(-8px);
+    background: rgba(20,20,20,.85); border: 1px solid #ffd23f; color: #ffe9a8;
+    padding: 10px 22px; border-radius: 6px; font-size: 17px; font-weight: 700;
+    opacity: 0; transition: opacity .25s, transform .25s; text-align: center; max-width: 80%;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #crosshair {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    font-size: 22px; color: rgba(255,255,255,.9); text-shadow: 0 0 4px #000;
+  }
+
+  /* ---------- Full-screen menus ---------- */
+  .screen {
+    position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; color: #fff;
+    background: linear-gradient(180deg, rgba(10,14,24,.55), rgba(10,14,24,.85));
+  }
+  .screen h1 {
+    margin: 0; font-size: 72px; letter-spacing: 4px; font-weight: 900;
+    background: linear-gradient(180deg, #ffe9a8, #ff9a3d);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 4px 30px rgba(255,150,50,.25);
+  }
+  .screen h2 {
+    margin: 6px 0 0; font-size: 20px; letter-spacing: 8px; font-weight: 400;
+    color: #9fd4ec; text-transform: uppercase;
+  }
+  .screen p { max-width: 560px; font-size: 17px; line-height: 1.55; color: #ddd; }
+  .screen .story { font-style: italic; color: #ffd98a; }
+  .btn {
+    pointer-events: auto; cursor: pointer; margin-top: 18px; padding: 14px 44px;
+    font-size: 20px; font-weight: 800; letter-spacing: 2px; color: #111;
+    background: linear-gradient(180deg, #ffd23f, #ff9a3d); border: none; border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(255,150,50,.4);
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.secondary {
+    background: rgba(255,255,255,.15); color: #fff; box-shadow: none;
+    font-size: 16px; padding: 10px 28px;
+  }
+  .controls-grid {
+    display: grid; grid-template-columns: auto auto; gap: 4px 22px; margin-top: 16px;
+    font-size: 14px; color: #bbb; text-align: left;
+  }
+  .controls-grid b { color: #fff; }
+  #pause-screen, #wasted-screen, #busted-screen { display: none; }
+  #wasted-screen h1 {
+    background: linear-gradient(180deg, #ff6a6a, #a00);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  #busted-screen h1 {
+    background: linear-gradient(180deg, #8ab4ff, #2255cc);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  #status {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Solara City: an open-world crime game. Explore the city on foot and by car, take missions, evade the police."></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud">
+  <canvas id="minimap" width="190" height="190"></canvas>
+  <div id="stats">
+    <div id="stars">☆☆☆☆☆</div>
+    <div id="cash">$250</div>
+    <div id="ammo">🔫 60</div>
+  </div>
+  <div id="health-bar">
+    <div id="health-track"><div id="health-fill"></div></div>
+    <div id="health-text">100</div>
+  </div>
+  <div id="objective">Press M to start a mission</div>
+  <div id="speed">0 km/h</div>
+  <div id="hint"></div>
+  <div id="toast"></div>
+  <div id="crosshair">+</div>
+</div>
+
+<div id="start-screen" class="screen">
+  <h1>SOLARA CITY</h1>
+  <h2>Sun · Crime · Escape</h2>
+  <p class="story">Rico Vega came to Solara City with $250 and a fast mouth. Mara, the fixer on
+  Coral Ave, has work for a driver who doesn't ask questions — if he can stay ahead of the Solara PD.</p>
+  <p>Explore a living city on foot and by car. Steal rides, run missions, build your fortune —
+  and watch the stars. Five jobs stand between Rico and the big time.</p>
+  <button class="btn" id="play-btn">▶ PLAY</button>
+  <div class="controls-grid">
+    <span><b>WASD</b> move / drive</span><span><b>Mouse</b> look · <b>Click</b> shoot</span>
+    <span><b>Shift</b> sprint</span><span><b>Q</b> punch · <b>E</b> enter / exit car</span>
+    <span><b>Space</b> handbrake</span><span><b>M</b> mission · <b>P</b> pause · <b>H</b> horn</span>
+  </div>
+  <p style="font-size:13px;color:#888">Progress saves automatically. An original game — no GTA assets, names or music.</p>
+</div>
+
+<div id="pause-screen" class="screen">
+  <h1 style="font-size:52px">PAUSED</h1>
+  <p>Solara City waits for no one — except now.</p>
+  <button class="btn" id="resume-btn">RESUME</button>
+  <button class="btn secondary" id="save-btn">SAVE PROGRESS</button>
+  <button class="btn secondary" id="restart-btn">RESTART</button>
+</div>
+
+<div id="wasted-screen" class="screen">
+  <h1>WASTED</h1>
+  <p>Rico didn't make it. The hospital patched him up — for a fee.</p>
+  <button class="btn" id="wasted-btn">RESPAWN AT HOSPITAL</button>
+</div>
+
+<div id="busted-screen" class="screen">
+  <h1>BUSTED</h1>
+  <p>The Solara PD caught up with Rico. Bail wasn't cheap.</p>
+  <button class="btn" id="busted-btn">LEAVE THE STATION</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
